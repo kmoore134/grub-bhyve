@@ -46,6 +46,12 @@
 
 #pragma GCC diagnostic ignored "-Wmissing-prototypes"
 
+#ifdef BHYVE
+#include <grub/i386/memory.h>
+#include <grub/i386/relocator.h>
+#include <grub/emu/bhyve.h>
+#endif
+
 #include "progname.h"
 #include <argp.h>
 
@@ -56,6 +62,13 @@ static jmp_buf main_env;
 
 /* Store the prefix specified by an argument.  */
 static char *root_dev = NULL, *dir = NULL;
+
+#ifdef BHYVE
+static char *grub_cfg = NULL;
+
+#define MB (1024 * 1024)
+static char *vmname = NULL;
+#endif
 
 grub_addr_t grub_modbase = 0;
 
@@ -74,7 +87,11 @@ void
 grub_machine_get_bootlocation (char **device, char **path)
 {
   *device = root_dev;
+#ifdef BHYVE
+  *path = grub_xasprintf ("%s/%s", dir, grub_cfg);
+#else
   *path = dir;
+#endif
 }
 
 void
@@ -95,6 +112,13 @@ static struct argp_option options[] = {
    N_("use GRUB files in the directory DIR [default=%s]"), 0},
   {"verbose",     'v', 0,      0, N_("print verbose messages."), 0},
   {"hold",     'H', N_("SECS"),      OPTION_ARG_OPTIONAL, N_("wait until a debugger will attach"), 0},
+#ifdef BHYVE
+  {"cons-dev", 'c', N_("cons-dev"), 0, N_("a tty(4) device to use for terminal I/O"), 0},
+  {"evga",  'e', 0,            0, N_("exclude VGA rows/cols from bootinfo"), 0},
+  {"grub-cfg", 'g', N_("CFG"), 0, N_("alternative name of grub.cfg"), 0},
+  {"ncons",  'n', 0,            0, N_("disable insertion of console=ttys0"), 0},
+  {"memory", 'M', N_("MBYTES"), 0, N_("guest RAM in MB [default=%d]"), 0},
+#endif
   { 0, 0, 0, 0, 0, 0 }
 };
 
@@ -109,6 +133,12 @@ help_filter (int key, const char *text, void *input __attribute__ ((unused)))
       return xasprintf (text, DEFAULT_DIRECTORY);
     case 'm':
       return xasprintf (text, DEFAULT_DEVICE_MAP);
+#ifdef BHYVE
+    case 'g':
+      return xasprintf (text, DEFAULT_GRUB_CFG);
+    case 'M':
+      return xasprintf (text, DEFAULT_GUESTMEM);
+#endif
     default:
       return (char *) text;
     }
@@ -120,6 +150,9 @@ struct arguments
 {
   const char *dev_map;
   int hold;
+#ifdef BHYVE
+  grub_uint64_t memsz;
+#endif
 };
 
 static error_t
@@ -148,13 +181,40 @@ argp_parser (int key, char *arg, struct argp_state *state)
     case 'v':
       verbosity++;
       break;
+#ifdef BHYVE
+    case 'c':
+      grub_emu_bhyve_set_console_dev(xstrdup(arg));
+      break;
+    case 'e':
+      grub_emu_bhyve_unset_vgainsert();
+      break;
+    case 'g':
+      free (grub_cfg);
+      grub_cfg = xstrdup(arg);
+      break;
+    case 'n':
+      grub_emu_bhyve_unset_cinsert();
+      break;
+    case 'M':
+      if (grub_emu_bhyve_parse_memsize(arg, &arguments->memsz) != 0) {
+	fprintf (stderr, _("Invalid guest memory size `%s'."), arg);
+	fprintf (stderr, "\n");
+	return EINVAL;
+      }
+      break;
+#endif
 
     case ARGP_KEY_ARG:
       {
+#ifdef BHYVE
+	/* The name of the vm */
+	vmname = xstrdup (arg);
+#else
 	/* Too many arguments. */
 	fprintf (stderr, _("Unknown extra argument `%s'."), arg);
 	fprintf (stderr, "\n");
 	argp_usage (state);
+#endif
       }
       break;
 
@@ -165,8 +225,13 @@ argp_parser (int key, char *arg, struct argp_state *state)
 }
 
 static struct argp argp = {
+#ifdef BHYVE
+  options, argp_parser, "vmname",
+  N_("grub-bhyve boot loader."),
+#else
   options, argp_parser, NULL,
   N_("GRUB emulator."),
+#endif
   NULL, help_filter, NULL
 };
 
@@ -181,6 +246,10 @@ main (int argc, char *argv[])
     { 
       .dev_map = DEFAULT_DEVICE_MAP,
       .hold = 0
+#ifdef BHYVE
+	,
+      .memsz = DEFAULT_GUESTMEM * MB
+#endif
     };
   volatile int hold = 0;
 
@@ -188,11 +257,31 @@ main (int argc, char *argv[])
 
   dir = xstrdup (DEFAULT_DIRECTORY);
 
+#ifdef BHYVE
+  grub_cfg = xstrdup (DEFAULT_GRUB_CFG);
+#endif
+
   if (argp_parse (&argp, argc, argv, 0, 0, &arguments) != 0)
     {
       fprintf (stderr, "%s", _("Error in parsing command line arguments\n"));
       exit(1);
     }
+
+#ifdef BHYVE
+  if (vmname == NULL)
+    {
+      char buf[80];
+      fprintf (stderr, "%s", _("Required VM name parameter not supplied\n"));
+      argp_help (&argp, stderr, ARGP_HELP_SEE, buf);
+      exit(1);
+    }
+
+  if (grub_emu_bhyve_init(vmname, arguments.memsz) != 0)
+    {
+      fprintf (stderr, "%s", _("Error in initializing VM\n"));
+      exit(1);
+    }
+#endif
 
   hold = arguments.hold;
   /* Wait until the ARGS.HOLD variable is cleared by an attached debugger. */

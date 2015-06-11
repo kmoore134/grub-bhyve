@@ -73,7 +73,7 @@ grub_TRANSFORM([grub-file])
 
 # Optimization flag.  Allow user to override.
 if test "x$TARGET_CFLAGS" = x; then
-  TARGET_CFLAGS="$TARGET_CFLAGS -Os"
+  TARGET_CFLAGS="$TARGET_CFLAGS -O0 -g"
 fi
 
 # Default HOST_CPPFLAGS
@@ -1746,10 +1746,11 @@ AM_CONDITIONAL([COND_HOST_KFREEBSD], [test x$host_kernel = xkfreebsd])
 AM_CONDITIONAL([COND_HOST_XNU], [test x$host_kernel = xxnu])
 AM_CONDITIONAL([COND_HOST_ILLUMOS], [test x$host_kernel = xillumos])
 
-AM_CONDITIONAL([COND_MAN_PAGES], [test x$cross_compiling = xno -a x$HELP2MAN != x])
+AM_CONDITIONAL([COND_MAN_PAGES], [test x$want_man_pages = xnoway])
 AM_CONDITIONAL([COND_GRUB_EMU_SDL], [test x$enable_grub_emu_sdl = xyes])
 AM_CONDITIONAL([COND_GRUB_EMU_PCI], [test x$enable_grub_emu_pci = xyes])
 AM_CONDITIONAL([COND_GRUB_MKFONT], [test x$enable_grub_mkfont = xyes])
+AM_CONDITIONAL([COND_GRUB_EMU_BHYVE], [test x$enable_grub_emu_bhyve = xyes])
 AM_CONDITIONAL([COND_GRUB_MOUNT], [test x$enable_grub_mount = xyes])
 AM_CONDITIONAL([COND_HAVE_FONT_SOURCE], [test x$FONT_SOURCE != x])
 if test x$FONT_SOURCE != x ; then

@@ -60,6 +60,12 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define ACCEPTS_PURE_TEXT 1
 #endif
 
+/* BHYVE */
+#if 1
+#include <grub/emu/bhyve.h>
+#define COM0_CONS	"console=ttyS0"
+#endif
+
 static grub_dl_t my_mod;
 
 static grub_size_t linux_mem_size;
@@ -550,7 +556,17 @@ grub_linux_boot (void)
 	  linux_params.video_height = 25;
 	}
     }
-
+#if 1 /* BHYVE */
+  else if (grub_emu_bhyve_vgainsert())
+    {
+      /*
+       * The width/height have to be set for older Linux versions
+       * (Centos 5.* and earlier) to avoid a zero-sized alloc panic
+       */
+      linux_params.video_width = 80;
+      linux_params.video_height = 25;     
+    }
+#endif
   mmap_size = find_mmap_size ();
   /* Make sure that each size is aligned to a page boundary.  */
   cl_offset = ALIGN_UP (mmap_size + sizeof (linux_params), 4096);
@@ -686,6 +702,10 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
   grub_size_t align, min_align;
   int relocatable;
   grub_uint64_t preferred_address = GRUB_LINUX_BZIMAGE_ADDR;
+  #if 1 /* BHYVE */
+  char *cmdline_ptr;
+  int cons_found = 0;
+  #endif
 
   grub_dl_ref (my_mod);
 
@@ -1003,18 +1023,48 @@ grub_cmd_linux (grub_command_t cmd __attribute__ ((unused)),
       {
 	linux_params.loadflags |= GRUB_LINUX_FLAG_QUIET;
       }
+#if 1 /* BHYVE */
+    else if (grub_memcmp (argv[i], COM0_CONS, sizeof (COM0_CONS) - 1) == 0)
+      {
+	cons_found = 1;
+      }
+#endif
 
   /* Create kernel command line.  */
   linux_cmdline = grub_zalloc (maximal_cmdline_size + 1);
   if (!linux_cmdline)
     goto fail;
+
+#if 1 /* BHYVE */
+  /*
+   * Insert "console=ttyS0 " unless instructed not to, or if the
+   * string is already present. Make it the first element in the
+   * command line so it could be overridden by a later different
+   * console directive
+   */
+  cmdline_ptr = linux_cmdline;
+  if (!cons_found && grub_emu_bhyve_cinsert())
+    {
+      grub_memcpy (cmdline_ptr, COM0_CONS, sizeof(COM0_CONS));
+      cmdline_ptr += grub_strlen (cmdline_ptr);
+      cmdline_ptr[0] = ' ';
+      cmdline_ptr++;
+    } 
+  grub_memcpy (cmdline_ptr, LINUX_IMAGE, sizeof (LINUX_IMAGE));
+  grub_create_loader_cmdline (argc, argv,
+			      cmdline_ptr
+			      + sizeof (LINUX_IMAGE) - 1,
+			      maximal_cmdline_size
+			      - (sizeof (LINUX_IMAGE) - 1));
+
+#else
   grub_memcpy (linux_cmdline, LINUX_IMAGE, sizeof (LINUX_IMAGE));
   grub_create_loader_cmdline (argc, argv,
 			      linux_cmdline
 			      + sizeof (LINUX_IMAGE) - 1,
 			      maximal_cmdline_size
 			      - (sizeof (LINUX_IMAGE) - 1));
-
+#endif
   len = prot_file_size;
   if (grub_file_read (file, prot_mode_mem, len) != len && !grub_errno)
     grub_error (GRUB_ERR_BAD_OS, N_("premature end of file %s"),
@@ -1134,12 +1184,26 @@ grub_cmd_initrd (grub_command_t cmd __attribute__ ((unused)),
 
 static grub_command_t cmd_linux, cmd_initrd;
 
+/* BHYVE */
+#if 1
+static grub_command_t cmd_linux16, cmd_initrd16;
+#endif
+
 GRUB_MOD_INIT(linux)
 {
   cmd_linux = grub_register_command ("linux", grub_cmd_linux,
 				     0, N_("Load Linux."));
   cmd_initrd = grub_register_command ("initrd", grub_cmd_initrd,
 				      0, N_("Load initrd."));
+
+  /* BHYVE */
+#if 1
+  cmd_linux16 = grub_register_command ("linux16", grub_cmd_linux,
+				     0, N_("Load Linux (alias)."));
+  cmd_initrd16 = grub_register_command ("initrd16", grub_cmd_initrd,
+				      0, N_("Load initrd (alias)."));
+#endif
+
   my_mod = mod;
 }
 
@@ -1147,4 +1211,10 @@ GRUB_MOD_FINI(linux)
 {
   grub_unregister_command (cmd_linux);
   grub_unregister_command (cmd_initrd);
+
+  /* BHYVE */
+#if 1
+  grub_unregister_command (cmd_linux16);
+  grub_unregister_command (cmd_initrd16);
+#endif
 }

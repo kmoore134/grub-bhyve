@@ -76,6 +76,7 @@ KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/i18n.h
 KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/kernel.h
 KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/list.h
 KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/misc.h
+KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/emu/bhyve.h
 if COND_emu
 KERNEL_HEADER_FILES += $(top_srcdir)/include/grub/compiler-rt-emu.h
 else

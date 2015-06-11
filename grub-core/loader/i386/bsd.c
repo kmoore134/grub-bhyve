@@ -132,7 +132,7 @@ static const struct grub_arg_option openbsd_opts[] =
     {"config", 'c', 0, N_("Change configured devices."), 0, 0},
     {"single", 's', 0, N_("Boot into single mode."), 0, 0},
     {"kdb", 'd', 0, N_("Enter in KDB on boot."), 0, 0},
-    {"root", 'r', 0, N_("Set root device."), "wdXY", ARG_TYPE_STRING},
+    {"root", 'r', 0, N_("Set root device."), "[sd|wd]XY", ARG_TYPE_STRING},
     {"serial", 'h', GRUB_ARG_OPTION_OPTIONAL, 
      N_("Use serial console."),
      /* TRANSLATORS: "com" is static and not to be translated. It refers to
@@ -150,6 +150,9 @@ static const grub_uint32_t openbsd_flags[] =
 
 #define OPENBSD_ROOT_ARG (ARRAY_SIZE (openbsd_flags) - 1)
 #define OPENBSD_SERIAL_ARG (ARRAY_SIZE (openbsd_flags))
+
+/* Match where the OpenBSD bootloader places bootargs */
+#define	GRUB_OPENBSD_TEMP_BUFFER   0x2000
 
 static const struct grub_arg_option netbsd_opts[] =
   {
@@ -856,7 +859,7 @@ grub_openbsd_boot (void)
 			       + tag->len);
   }
 
-  buf_target = GRUB_BSD_TEMP_BUFFER - 9 * sizeof (grub_uint32_t);
+  buf_target = GRUB_OPENBSD_TEMP_BUFFER - 9 * sizeof (grub_uint32_t);
   {
     grub_relocator_chunk_t ch;
     err = grub_relocator_alloc_chunk_addr (relocator, &ch, buf_target,
@@ -1347,7 +1350,8 @@ grub_bsd_load_elf (grub_elf_t elf, const char *filename)
 	      && phdr->p_type != PT_DYNAMIC)
 	    continue;
 
-	  paddr = phdr->p_paddr & 0xFFFFFFF;
+	  /* XXX bhyve - extend mask */
+	  paddr = phdr->p_paddr & 0xfffffff;
 
 	  if (paddr < kern_start)
 	    kern_start = paddr;
@@ -1402,7 +1406,8 @@ grub_bsd_load_elf (grub_elf_t elf, const char *filename)
 	      && phdr->p_type != PT_DYNAMIC)
 	    continue;
 
-	  paddr = phdr->p_paddr & 0xFFFFFFF;
+	  /* XXX bhyve - extend mask */
+	  paddr = phdr->p_paddr & 0xfffffff;
 
 	  if (paddr < kern_start)
 	    kern_start = paddr;
@@ -1656,6 +1661,7 @@ grub_cmd_openbsd (grub_extcmd_context_t ctxt, int argc, char *argv[])
       serial.device = (GRUB_OPENBSD_COM_MAJOR << 8) | port;
       serial.speed = speed;
       serial.addr = grub_ns8250_hw_get_port (port);
+      serial.frequency = 0;
 	  
       grub_bsd_add_meta (OPENBSD_BOOTARG_CONSOLE, &serial, sizeof (serial));
       bootflags |= OPENBSD_RB_SERCONS;
