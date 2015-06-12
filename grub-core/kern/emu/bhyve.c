@@ -249,20 +249,6 @@ grub_relocator_unload (struct grub_relocator *rel)
   grub_free (rel);
 }
 
-grub_err_t
-grub_mmap_iterate (grub_memory_hook_t hook)
-{
-  int i;
-
-  for (i = 0; i < binfo->nsegs; i++) {
-      (*hook)(binfo->segs[i].start,
-	      binfo->segs[i].end - binfo->segs[i].start,
-	      binfo->segs[i].type);
-  }
-
-  return GRUB_ERR_NONE;
-}
-
 /*
  * Boot handoff
  */

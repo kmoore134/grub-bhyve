@@ -113,6 +113,8 @@
 #endif
 #endif
 
+typedef uint64_t u64;
+
 typedef union {
     int a;
     short b;
