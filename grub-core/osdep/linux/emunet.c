@@ -47,6 +47,7 @@ grub_emunet_receive (void *packet, grub_size_t sz)
 int
 grub_emunet_create (grub_size_t *mtu)
 {
+#ifdef __Linux__
   struct ifreq ifr;
   *mtu = 1500;
   fd = open ("/dev/net/tun", O_RDWR | O_NONBLOCK);
@@ -60,6 +61,18 @@ grub_emunet_create (grub_size_t *mtu)
       fd = -1;
       return -1;
     }
+#endif
+#ifdef __FreeBSD__
+  int fd;
+  fd = open ("/dev/tap0", O_RDWR | O_NONBLOCK);
+  if (fd < 0)
+    {
+      close (fd);
+      fd = -1;
+      return -1;
+    }
+#endif
+
   return 0;
 }
 

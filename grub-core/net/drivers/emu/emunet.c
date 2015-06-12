@@ -98,18 +98,11 @@ static int registered = 0;
 
 GRUB_MOD_INIT(emunet)
 {
-#ifdef __Linux__
   if (!grub_emunet_create (&emucard.mtu))
     {
       grub_net_card_register (&emucard);
       registered = 1;
     }
-#endif
-#ifdef __FreeBSD__
-  fd = open ("/dev/tap0", O_RDWR | O_NONBLOCK);
-  if (fd < 0)
-    return;
-#endif
 }
 
 GRUB_MOD_FINI(emunet)
