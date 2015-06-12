@@ -37,6 +37,14 @@
 #include <sys/ioctl.h>
 #include <langinfo.h>
 
+#ifdef BHYVE
+#include <sys/param.h>
+        
+#include <termios.h>
+
+#include <grub/emu/bhyve.h> 
+#endif 
+
 #include <grub/emu/console.h>
 
 extern struct grub_terminfo_output_state grub_console_terminfo_output;
@@ -44,6 +52,17 @@ static int original_fl;
 static int saved_orig;
 static struct termios orig_tty;
 static struct termios new_tty;
+
+#ifdef BHYVE
+static const char *g_cdev = NULL;
+
+void
+grub_emu_bhyve_set_console_dev(const char *dev)
+{
+
+        g_cdev = dev;
+}
+#endif
 
 static void
 put (struct grub_term_output *term __attribute__ ((unused)), const int c)
